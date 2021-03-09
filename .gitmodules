@@ -1,0 +1,3 @@
+[submodule "submodules/erfnet_pytorch"]
+	path = submodules/erfnet_pytorch
+	url = https://gitlab.com/dtmoodie/erfnet_pytorch
