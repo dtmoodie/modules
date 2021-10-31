@@ -1,11 +1,21 @@
 import inspect
+import importlib
 
-model_registry = {}
-
-
-def registerModel(ctr, name=None):
-    model_registry[ctr.__name__ if name is None else name] = ctr
-
+from torch.nn.modules.activation import *
+from torch.nn.modules.linear import *
+from torch.nn.modules.conv import *
+from torch.nn.modules.container import *
+from torch.nn.modules.batchnorm import *
+from torch.nn.modules.pooling import *
+from torch.nn.modules.instancenorm import *
+from torch.nn.modules.normalization import *
+from torch.nn.modules.dropout import *
+from torch.nn.modules.upsampling import *
+from torch.nn.modules.distance import *
+from torch.nn.modules.adaptive import *
+from torch.nn.modules.transformer import *
+from torch.nn.modules.flatten import *
+from torch.nn.modules.channelshuffle import *
 
 class TmpCrt(object):
     def __init__(self, ctr, sub_args):
@@ -16,9 +26,18 @@ class TmpCrt(object):
         # merge the two dictionaries, overriding with sub_args
         return self.ctr(*args, **{**kwargs, **self.sub_args})
 
-# todo make this recursive
+def getConstructor(name):
+    if '.' in name:
+        idx = name.rfind('.')
+        module = name[0:idx]
+        mod = importlib.import_module(module)
+        name = name[idx+1:]
+        ctr = eval(f'mod.{name}')
+    else:
+        ctr = eval(name)
+    return ctr
 
-
+# TODO make this recursive
 def buildModel(config=None, type=None, *pargs, **kwargs):
     if config is not None:
         return buildModel(**config)
@@ -26,27 +45,23 @@ def buildModel(config=None, type=None, *pargs, **kwargs):
         kwargs.update(kwargs['args'])
         del kwargs['args']
 
-    assert type in model_registry, "Unable to find {} in model registry {}".format(
-        type, '\n'.join(model_registry.keys()))
     for k, v in kwargs.items():
         if isinstance(v, dict) and 'type' in v:
-            tmp_type = v['type']
-            assert tmp_type in model_registry, "Unable to find subtype {} in model registry {}".format(
-                tmp_type, '\n'.join(model_registry.keys()))
             if 'args' in v:
-                v = model_registry[tmp_type](**v['args'])
+                v = buildModel(**v['args'])
             else:
-                v = model_registry[tmp_type]
+                ctr = getConstructor(v['type'])
+                v = ctr
 
             kwargs[k] = v
-    return model_registry[type](**kwargs)
+    ctr = getConstructor(name=type)
+    return ctr(**kwargs)
 
 
 def completeConfig(config):
     typename = config['type']
-    assert typename in model_registry, 'Unable to find {} in model registry {}'.format(
-        typename, '\n'.join(model_registry.keys()))
-    sig = inspect.signature(model_registry[typename].__init__)
+    ctr = getConstructor(typename)
+    sig = inspect.signature(ctr.__init__)
     configuration_arguments = config['args'] if 'args' in config else dict()
     for arg in sig.parameters.keys():
         if 'self' != arg and 'kwargs' != arg:
@@ -59,3 +74,4 @@ def completeConfig(config):
                     configuration_arguments[arg] = sig.parameters[arg].default
     config['args'] = configuration_arguments
     return config
+
