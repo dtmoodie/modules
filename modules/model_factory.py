@@ -48,7 +48,7 @@ def buildModel(config=None, type=None, *pargs, **kwargs):
     for k, v in kwargs.items():
         if isinstance(v, dict) and 'type' in v:
             if 'args' in v:
-                v = buildModel(**v['args'])
+                v = buildModel(type=v['type'], **v['args'])
             else:
                 ctr = getConstructor(v['type'])
                 v = ctr
