@@ -32,12 +32,26 @@ def getConstructor(name):
         module = name[0:idx]
         mod = importlib.import_module(module)
         name = name[idx+1:]
-        ctr = eval(f'mod.{name}')
+        if 'timm' in module:
+            def timmFactoryHelper(pretrained=False, checkpoint_path=None, scriptable=False, exportable=False, no_jit=False, drop_rate=0.0, global_pool='avg', **kwargs):
+                return mod.create_model(name, 
+                                        pretrained=pretrained, 
+                                        checkpoint_path=checkpoint_path, 
+                                        scriptable=scriptable, 
+                                        exportable=exportable, 
+                                        no_jit=no_jit, 
+                                        drop_rate=drop_rate, 
+                                        global_pool=global_pool, 
+                                        **kwargs)
+            # forward stuff to timm factory helper
+            ctr = timmFactoryHelper
+        else:
+            # standard constructor
+            ctr = eval(f'mod.{name}')
     else:
         ctr = eval(name)
     return ctr
 
-# TODO make this recursive
 def buildModel(config=None, type=None, *pargs, **kwargs):
     if config is not None:
         return buildModel(**config)
@@ -61,7 +75,10 @@ def buildModel(config=None, type=None, *pargs, **kwargs):
 def completeConfig(config):
     typename = config['type']
     ctr = getConstructor(typename)
-    sig = inspect.signature(ctr.__init__)
+    if callable(ctr):
+        sig = inspect.signature(ctr)
+    else:
+        sig = inspect.signature(ctr.__init__)
     configuration_arguments = config['args'] if 'args' in config else dict()
     for arg in sig.parameters.keys():
         if 'self' != arg and 'kwargs' != arg:
