@@ -1,9 +1,6 @@
 [submodule "submodules/erfnet_pytorch"]
 	path = submodules/erfnet_pytorch
 	url = https://gitlab.com/dtmoodie/erfnet_pytorch
-[submodule "submodules/pytorch-image-models"]
-	path = submodules/pytorch-image-models
-	url = https://github.com/rwightman/pytorch-image-models
 [submodule "submodules/monodepth-pytorch"]
 	path = submodules/monodepth-pytorch
 	url = https://github.com/alwynmathew/monodepth-pytorch
@@ -12,4 +9,4 @@
 	url = https://github.com/Po-Hsun-Su/pytorch-ssim
 [submodule "submodules/pytorch-center-loss"]
 	path = submodules/pytorch-center-loss
-	url = https://github.com/KaiyangZhou/pytorch-center-loss
+	url = ssh://dan@percocetpenguin.asuscomm.com:4444/code/pytorch-center-loss
