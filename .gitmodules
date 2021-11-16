@@ -9,4 +9,4 @@
 	url = https://github.com/Po-Hsun-Su/pytorch-ssim
 [submodule "submodules/pytorch-center-loss"]
 	path = submodules/pytorch-center-loss
-	url = ssh://dan@percocetpenguin.asuscomm.com:4444/code/pytorch-center-loss
+	url = ssh://dan@percocetpenguin.asuscomm.com:4444/code/ml/pytorch-center-loss
