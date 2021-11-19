@@ -52,33 +52,68 @@ def getConstructor(name):
         ctr = eval(name)
     return ctr
 
-def buildModel(config=None, type=None, *pargs, **kwargs):
+object_dict = {}
+
+def buildModel(config=None, type=None, ref=None, *pargs, **kwargs):
+    if ref is not None:
+        return object_dict[ref]
     if config is not None:
         return buildModel(**config)
     if 'args' in kwargs:
         kwargs.update(kwargs['args'])
         del kwargs['args']
+    save_as = None
+    if 'as' in kwargs:
+        save_as = kwargs['as']
+        del kwargs['as']
+    
+    for k, v in kwargs.items():
+        if isinstance(v, str) and '%' == v[0]:
+            # perform value lookup
+            v = v[1:]
+            obj_name = v[0:v.find('.')]
+            expression = v[v.find('.')+1:]
+            obj = object_dict[obj_name]
+            kwargs[k] = eval(f'obj.{expression}')
 
     for k, v in kwargs.items():
         if isinstance(v, dict) and 'type' in v:
             if 'args' in v:
-                v = buildModel(type=v['type'], **v['args'])
+                new_v = buildModel(type=v['type'], **v['args'])
+                if 'as' in v:
+                    object_dict[v['as']] = new_v
+
             else:
                 ctr = getConstructor(v['type'])
-                v = ctr
+                if len(v) > 1:
+                    tmp_args = dict(v)
+                    del tmp_args['type']
+                    class Helper:
+                        def __init__(self, ctr):
+                            self.ctr = ctr
+                        def __call__(self, *pargs, **kwargs):
+                            return self.ctr(*pargs, **kwargs)
+                    ctr = Helper(ctr)
+                
+                new_v = ctr
 
-            kwargs[k] = v
+            kwargs[k] = new_v
     ctr = getConstructor(name=type)
-    return ctr(**kwargs)
+    obj = ctr(**kwargs)
+    if save_as is not None:
+        object_dict[save_as] = obj
+    return obj
 
+def getSignature(ctr):
+    if callable(ctr):
+        return inspect.signature(ctr)
+    else:
+        return inspect.signature(ctr.__init__)
 
 def completeConfig(config):
     typename = config['type']
     ctr = getConstructor(typename)
-    if callable(ctr):
-        sig = inspect.signature(ctr)
-    else:
-        sig = inspect.signature(ctr.__init__)
+    sig = getSignature(ctr)
     configuration_arguments = config['args'] if 'args' in config else dict()
     for arg in sig.parameters.keys():
         if 'self' != arg and 'kwargs' != arg:

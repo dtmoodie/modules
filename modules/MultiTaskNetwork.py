@@ -1,12 +1,26 @@
-from modules import erfnet
 import torch
+from .model_factory import buildModel
 
 class MultiTaskNetwork(torch.nn.Module):
-    def __init__(self, encoder, left_decoders: dict, right_decoders: dict):
+    def __init__(self, encoder, left_decoders: dict, right_decoders: dict = {}):
+        '''
+            MultiTaskNetwork takes in left right image pairs.  Shares a common encoder for both left and right, and then has two separate decoders.
+            The decoders are dictionaries that allow multiple tasks, one per dictionary.
+            params: 
+            - encoder the constructed encoder object
+            - left_decoders dictionary describing how to build the left decoders
+            - right_decoders dictionary describing how to build the right decoders
+        '''
         super().__init__()
         self.encoder = encoder
-        self.left_decoders = torch.nn.ModuleDict(left_decoders)
-        self.right_decoders = torch.nn.ModuleDict(right_decoders)
+        left_decoders_ = {}
+        for k,v in left_decoders.items():
+            left_decoders_[k] = buildModel(config=v)
+        self.left_decoders = left_decoders
+        right_decoders_ = {}
+        for k,v in right_decoders.items():
+            right_decoders_[k] = buildModel(config=v)
+        self.right_decoders = torch.nn.ModuleDict(right_decoders_)
 
     def forward(self, left, right=None):
         left_features = self.encoder(left)
