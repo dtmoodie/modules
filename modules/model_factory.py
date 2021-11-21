@@ -1,6 +1,9 @@
 import inspect
 import importlib
+import json
+import os
 
+import torch
 from torch.nn.modules.activation import *
 from torch.nn.modules.linear import *
 from torch.nn.modules.conv import *
@@ -33,7 +36,7 @@ def getConstructor(name):
         mod = importlib.import_module(module)
         name = name[idx+1:]
         if 'timm' in module:
-            def timmFactoryHelper(pretrained=False, checkpoint_path=None, scriptable=False, exportable=False, no_jit=False, drop_rate=0.0, global_pool='avg', **kwargs):
+            def timmFactoryHelper(pretrained=False, checkpoint_path=None, scriptable=False, exportable=False, no_jit=False, drop_rate=0.0, **kwargs):
                 return mod.create_model(name, 
                                         pretrained=pretrained, 
                                         checkpoint_path=checkpoint_path, 
@@ -41,7 +44,6 @@ def getConstructor(name):
                                         exportable=exportable, 
                                         no_jit=no_jit, 
                                         drop_rate=drop_rate, 
-                                        global_pool=global_pool, 
                                         **kwargs)
             # forward stuff to timm factory helper
             ctr = timmFactoryHelper
@@ -52,12 +54,23 @@ def getConstructor(name):
         ctr = eval(name)
     return ctr
 
-def buildModel(config=None, type=None, *pargs, **kwargs):
+def buildModel(config=None, type=None, path='./', pretrained=False, *pargs, **kwargs):
     if config is not None:
         return buildModel(**config)
     if 'args' in kwargs:
         kwargs.update(kwargs['args'])
+        if 'pretrained' in kwargs['args']:
+            pretrained = kwargs['args']['pretrained']
         del kwargs['args']
+    if 'as' in kwargs:
+        print('Need to save object as ' + kwargs['as'])
+    if pretrained:
+        # TODO testing since we do some manipulation above
+        config = {'type': type, **kwargs}
+        model_hash = hash(json.dumps(config, sort_keys=True))
+        path_ = os.path.join(path, str(model_hash) + '.pt')
+        if os.path.exists(path_):
+            return torch.load(path_)
 
     for k, v in kwargs.items():
         if isinstance(v, dict) and 'type' in v:
@@ -71,6 +84,9 @@ def buildModel(config=None, type=None, *pargs, **kwargs):
     ctr = getConstructor(name=type)
     return ctr(**kwargs)
 
+def cacheModel(config, model, path='./'):
+    model_hash = hash(json.dumps(config, sort_keys=True))
+    torch.save(model, os.path.join(path, str(model_hash) + '.pt'))
 
 def completeConfig(config):
     typename = config['type']
