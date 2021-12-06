@@ -1,0 +1,28 @@
+
+
+type: modules.MultiTaskNetwork
+encoder:
+  type: modules.erfnet.Encoder
+  as: encoder
+  args:
+    filter_channels: 16
+    normalization:
+      type: BatchNorm2d
+      eps: 10
+    activation:
+      type: ReLU
+left_decoders:
+  pred_classes:
+    type: modules.erfnet.Decoder
+    args:
+      num_output_channels: 32
+      num_input_channels: "%encoder.num_output_channels"
+  pred_depth:
+    type: modules.erfnet.DynamicPyramidDecoder
+    as: depth_decoder
+    args:
+      num_output_channels: [1, 1, 1]
+      num_input_channels: "%encoder.num_output_channels"
+right_decoders:
+  pred_depth:
+    ref: depth_decoder

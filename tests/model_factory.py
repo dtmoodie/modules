@@ -15,12 +15,20 @@ config = {
     "type": "modules.erfnet.Encoder",
     'args': {
         'activation': {
-            'type': 'LeakyReLU'
+            'type': 'LeakyReLU',
+            'negative_slope': 0.1
         },
-        'negative_slope': 0.1,
+        
         'filter_channels': 32
     }
 }
 encoder = modules.model_factory.buildModel(config)
 
 print(encoder)
+
+
+# this tests the advanced features when creating a multi task network
+import yaml
+config = yaml.safe_load(open('config.yaml', 'rt'))
+model = modules.model_factory.buildModel(config)
+

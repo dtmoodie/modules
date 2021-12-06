@@ -54,7 +54,11 @@ def getConstructor(name):
         ctr = eval(name)
     return ctr
 
-def buildModel(config=None, type=None, path='./', pretrained=False, *pargs, **kwargs):
+object_dict = {}
+
+def buildModel(config=None, type=None, ref=None, path='./', pretrained=False, *pargs, **kwargs):
+    if ref is not None:
+        return object_dict[ref]
     if config is not None:
         return buildModel(**config)
     if 'args' in kwargs:
@@ -62,8 +66,7 @@ def buildModel(config=None, type=None, path='./', pretrained=False, *pargs, **kw
         if 'pretrained' in kwargs['args']:
             pretrained = kwargs['args']['pretrained']
         del kwargs['args']
-    if 'as' in kwargs:
-        print('Need to save object as ' + kwargs['as'])
+
     if pretrained:
         # TODO testing since we do some manipulation above
         config = {'type': type, **kwargs}
@@ -72,29 +75,63 @@ def buildModel(config=None, type=None, path='./', pretrained=False, *pargs, **kw
         if os.path.exists(path_):
             return torch.load(path_)
 
+    save_as = None
+    if 'as' in kwargs:
+        save_as = kwargs['as']
+        del kwargs['as']
+    
+    for k, v in kwargs.items():
+        if isinstance(v, str) and '%' == v[0]:
+            # perform value lookup
+            v = v[1:]
+            obj_name = v[0:v.find('.')]
+            expression = v[v.find('.')+1:]
+            obj = object_dict[obj_name]
+            kwargs[k] = eval(f'obj.{expression}')
+
     for k, v in kwargs.items():
         if isinstance(v, dict) and 'type' in v:
             if 'args' in v:
-                v = buildModel(type=v['type'], **v['args'])
+                new_v = buildModel(type=v['type'], **v['args'])
+                if 'as' in v:
+                    object_dict[v['as']] = new_v
+
             else:
                 ctr = getConstructor(v['type'])
-                v = ctr
+                if len(v) > 1:
+                    tmp_args = dict(v)
+                    del tmp_args['type']
+                    class Helper:
+                        def __init__(self, ctr):
+                            self.ctr = ctr
+                        def __call__(self, *pargs, **kwargs):
+                            return self.ctr(*pargs, **kwargs)
+                    ctr = Helper(ctr)
+                
+                new_v = ctr
 
-            kwargs[k] = v
+            kwargs[k] = new_v
     ctr = getConstructor(name=type)
-    return ctr(**kwargs)
+    obj = ctr(**kwargs)
+    if save_as is not None:
+        object_dict[save_as] = obj
+    return obj
+
 
 def cacheModel(config, model, path='./'):
     model_hash = hash(json.dumps(config, sort_keys=True))
     torch.save(model, os.path.join(path, str(model_hash) + '.pt'))
 
+def getSignature(ctr):
+    if callable(ctr):
+        return inspect.signature(ctr)
+    else:
+        return inspect.signature(ctr.__init__)
+
 def completeConfig(config):
     typename = config['type']
     ctr = getConstructor(typename)
-    if callable(ctr):
-        sig = inspect.signature(ctr)
-    else:
-        sig = inspect.signature(ctr.__init__)
+    sig = getSignature(ctr)
     configuration_arguments = config['args'] if 'args' in config else dict()
     for arg in sig.parameters.keys():
         if 'self' != arg and 'kwargs' != arg:
