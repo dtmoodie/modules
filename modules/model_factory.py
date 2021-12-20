@@ -18,7 +18,10 @@ from torch.nn.modules.distance import *
 from torch.nn.modules.adaptive import *
 from torch.nn.modules.transformer import *
 from torch.nn.modules.flatten import *
-from torch.nn.modules.channelshuffle import *
+try:
+    from torch.nn.modules.channelshuffle import *
+except:
+    pass
 
 class TmpCrt(object):
     def __init__(self, ctr, sub_args):
@@ -133,6 +136,8 @@ def completeConfig(config):
     ctr = getConstructor(typename)
     sig = getSignature(ctr)
     configuration_arguments = config['args'] if 'args' in config else dict()
+    if configuration_arguments is None:
+        configuration_arguments = {}
     for arg in sig.parameters.keys():
         if 'self' != arg and 'kwargs' != arg:
             if inspect._empty == sig.parameters[arg].default:
