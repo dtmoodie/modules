@@ -33,50 +33,34 @@ class TmpCrt(object):
         return self.ctr(*args, **{**kwargs, **self.sub_args})
 
 def getConstructor(name):
+    if inspect.isclass(name):
+        return name
     if '.' in name:
         idx = name.rfind('.')
         module = name[0:idx]
         mod = importlib.import_module(module)
         name = name[idx+1:]
-        if 'timm' in module:
-            def timmFactoryHelper(pretrained=False, checkpoint_path=None, scriptable=False, exportable=False, no_jit=False, drop_rate=0.0, **kwargs):
-                return mod.create_model(name, 
-                                        pretrained=pretrained, 
-                                        checkpoint_path=checkpoint_path, 
-                                        scriptable=scriptable, 
-                                        exportable=exportable, 
-                                        no_jit=no_jit, 
-                                        drop_rate=drop_rate, 
-                                        **kwargs)
-            # forward stuff to timm factory helper
-            ctr = timmFactoryHelper
-        else:
-            # standard constructor
-            ctr = eval(f'mod.{name}')
+        # standard constructor
+        ctr = eval(f'mod.{name}')
     else:
         ctr = eval(name)
     return ctr
 
 object_dict = {}
 
-def buildModel(config=None, type=None, ref=None, path='./', pretrained=False, *pargs, **kwargs):
+def buildModel(config=None, type=None, ref=None, path='./', *pargs, **kwargs):
     if ref is not None:
         return object_dict[ref]
     if config is not None:
-        return buildModel(**config)
+        if inspect.isclass(config):
+            return buildModel(type=config, *pargs, **kwargs)
+        else:
+            return buildModel(**config, **kwargs)
     if 'args' in kwargs:
         kwargs.update(kwargs['args'])
         if 'pretrained' in kwargs['args']:
             pretrained = kwargs['args']['pretrained']
         del kwargs['args']
-
-    if pretrained:
-        # TODO testing since we do some manipulation above
-        config = {'type': type, **kwargs}
-        model_hash = hash(json.dumps(config, sort_keys=True))
-        path_ = os.path.join(path, str(model_hash) + '.pt')
-        if os.path.exists(path_):
-            return torch.load(path_)
 
     save_as = None
     if 'as' in kwargs:
@@ -87,15 +71,24 @@ def buildModel(config=None, type=None, ref=None, path='./', pretrained=False, *p
         if isinstance(v, str) and '%' == v[0]:
             # perform value lookup
             v = v[1:]
-            obj_name = v[0:v.find('.')]
-            expression = v[v.find('.')+1:]
-            obj = object_dict[obj_name]
-            kwargs[k] = eval(f'obj.{expression}')
+            end = v.find('.')
+            if end == -1:
+                # no expression, we're accessing an object, not a sub object
+                obj = object_dict[v]
+                kwargs[k] = eval(f'obj')
+            else:    
+                obj_name = v[0:end]
+                expression = v[v.find('.')+1:]
+                obj = object_dict[obj_name]
+                kwargs[k] = eval(f'obj.{expression}')
 
     for k, v in kwargs.items():
         if isinstance(v, dict) and 'type' in v:
             if 'args' in v:
-                new_v = buildModel(type=v['type'], **v['args'])
+                args = {}
+                if v['args'] is not None:
+                    args = v['args']
+                new_v = buildModel(type=v['type'], **args)
                 if 'as' in v:
                     object_dict[v['as']] = new_v
 
@@ -126,27 +119,46 @@ def cacheModel(config, model, path='./'):
     torch.save(model, os.path.join(path, str(model_hash) + '.pt'))
 
 def getSignature(ctr):
-    if callable(ctr):
-        return inspect.signature(ctr)
-    else:
+    if inspect.isclass(ctr):
         return inspect.signature(ctr.__init__)
+    else:
+        return inspect.signature(ctr)
+        
 
-def completeConfig(config):
-    typename = config['type']
-    ctr = getConstructor(typename)
-    sig = getSignature(ctr)
-    configuration_arguments = config['args'] if 'args' in config else dict()
+def recurseArguments(default_argument):
+    if isinstance(default_argument, dict):
+        output = {}
+        for name, argument in default_argument.items():
+            output[name] = recurseArguments(argument)
+        return output
+    if inspect.isclass(default_argument):
+        class_name = repr(default_argument).split("'")[1]
+        return {'type': class_name}
+    else:
+        return default_argument
+
+def completeConfigForFunction(configuration_arguments, foo, allow_missing=False, typename = ''):
+    sig = getSignature(foo)
+    
     if configuration_arguments is None:
         configuration_arguments = {}
     for arg in sig.parameters.keys():
         if 'self' != arg and 'kwargs' != arg:
             if inspect._empty == sig.parameters[arg].default:
-                assert arg in configuration_arguments, "Required argument for {} '{}' not found in the provided configuration".format(typename,
+                if not allow_missing:
+                    assert arg in configuration_arguments, "Required argument for {} '{}' not found in the provided configuration".format(typename,
                                                                                                                                       arg)
             else:
                 # This is an optional argument, if it isn't in the config file, update it
                 if not arg in configuration_arguments:
-                    configuration_arguments[arg] = sig.parameters[arg].default
-    config['args'] = configuration_arguments
+                    configuration_arguments[arg] = recurseArguments(sig.parameters[arg].default)
+    return configuration_arguments
+
+def completeConfig(config, allow_missing=False):
+    typename = config['type']
+    ctr = getConstructor(typename)
+    configuration_arguments = config['args'] if 'args' in config else dict()
+    config['args'] = completeConfigForFunction(configuration_arguments, ctr, typename=typename, allow_missing=allow_missing)
     return config
+    
 
