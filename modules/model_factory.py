@@ -48,7 +48,9 @@ def getConstructor(name):
 
 object_dict = {}
 
-def buildModel(config=None, type=None, ref=None, path='./', *pargs, **kwargs):
+def buildModel(config=None, type=None, ref=None, store: dict =None, path='./', *pargs, **kwargs):
+    if store is not None:
+        object_dict.update(store)
     if ref is not None:
         return object_dict[ref]
     if config is not None:
