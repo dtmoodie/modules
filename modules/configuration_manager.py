@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from modules.model_factory import buildModel, completeConfig, completeConfigForFunction
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import DummyLogger, LoggerCollection, TensorBoardLogger
 import torch
 
 import os
@@ -76,6 +77,14 @@ class TrainingConfigurationManager(pl.Callback):
 
     def on_train_start(self, trainer, model):
         if trainer.global_rank == 0:
+            logger = trainer.logger
+            if isinstance(logger, DummyLogger):
+                return
+            if isinstance(logger, LoggerCollection):
+                for log in logger._logger_iterable:
+                    if isinstance(log, TensorBoardLogger):
+                        logger = log
+                        break
             if hasattr(trainer.logger, 'log_dir'):
                 self.saveConfig(trainer.logger.log_dir)
 
