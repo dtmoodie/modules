@@ -1,7 +1,8 @@
 from argparse import ArgumentParser
 from modules.model_factory import buildModel, completeConfig, completeConfigForFunction
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import DummyLogger, LoggerCollection, TensorBoardLogger
+from pytorch_lightning.loggers import LoggerCollection, TensorBoardLogger
+from pytorch_lightning.loggers.base import DummyLogger
 import torch
 
 import os
