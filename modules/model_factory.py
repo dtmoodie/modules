@@ -23,6 +23,14 @@ try:
 except:
     pass
 
+
+have_ruamel = False
+try:
+    import ruamel.yaml
+    have_ruamel = True
+except:
+    pass
+
 class TmpCrt(object):
     def __init__(self, ctr, sub_args):
         self.ctr = ctr
@@ -122,9 +130,9 @@ def cacheModel(config, model, path='./'):
 
 def getSignature(ctr):
     if inspect.isclass(ctr):
-        return inspect.signature(ctr.__init__)
+        return inspect.signature(ctr.__init__), ctr.__init__.__doc__
     else:
-        return inspect.signature(ctr)
+        return inspect.signature(ctr), ctr.__doc__
         
 
 def recurseArguments(default_argument):
@@ -140,10 +148,11 @@ def recurseArguments(default_argument):
         return default_argument
 
 def completeConfigForFunction(configuration_arguments, foo, allow_missing=False, typename = ''):
-    sig = getSignature(foo)
+    sig, doc = getSignature(foo)
     
     if configuration_arguments is None:
         configuration_arguments = {}
+
     for arg in sig.parameters.keys():
         if 'self' != arg and 'kwargs' != arg:
             if inspect._empty == sig.parameters[arg].default:
@@ -154,6 +163,14 @@ def completeConfigForFunction(configuration_arguments, foo, allow_missing=False,
                 # This is an optional argument, if it isn't in the config file, update it
                 if not arg in configuration_arguments:
                     configuration_arguments[arg] = recurseArguments(sig.parameters[arg].default)
+            if doc is not None and have_ruamel and isinstance(configuration_arguments, ruamel.yaml.comments.CommentedMap):
+                for line in doc.split('\n'):
+                    idx = line.find(arg + ':')
+                    if idx > 0:
+                        idx += len(arg) + 1
+                        comment = line[idx:]
+                        configuration_arguments.yaml_add_eol_comment(comment, key=arg)
+
     return configuration_arguments
 
 def completeConfig(config, allow_missing=False):

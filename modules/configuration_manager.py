@@ -8,6 +8,12 @@ import torch
 import os
 import yaml
 
+have_ruamel = False
+try:
+    import ruamel.yaml
+    have_ruamel = True
+except:
+    pass
 class GenericDataModule(pl.LightningDataModule):
     def __init__(self, train, val=None, test=None, dataloader_config={}):
         self.train = train
@@ -55,7 +61,12 @@ class TrainingConfigurationManager(pl.Callback):
         self.setHyperParameterHandler('trainer', pl.Trainer)
 
     def loadDict(self, path):
-        return yaml.safe_load(open(path, 'rt'))
+        with open(path, 'rt') as f:
+            if have_ruamel:
+                loader = ruamel.yaml.YAML()
+                return loader.load(f)
+            else:
+                return yaml.safe_load(f)
 
     def setHyperParameterHandler(self, section_name, handler):
         self.hyper_parameter_handlers[section_name] = handler
@@ -70,11 +81,18 @@ class TrainingConfigurationManager(pl.Callback):
         os.makedirs(path, exist_ok=True)
         
         with open(os.path.join(path, 'hyp.yaml'), 'wt') as f:
-            yaml.dump(self.hyp, f)
+            if have_ruamel:
+                dumper = ruamel.yaml.YAML()
+                dumper.dump(self.hyp, f)
+            else:
+                yaml.dump(self.hyp, f)
 
         with open(os.path.join(path, 'model.yaml'), 'wt') as f:
             model = completeConfig(self.model, allow_missing=allow_missing)
-            yaml.dump(model, f)
+            if have_ruamel:
+                dumper.dump(model, f)
+            else:
+                yaml.dump(model, f)
 
     def on_train_start(self, trainer, model):
         if trainer.global_rank == 0:
